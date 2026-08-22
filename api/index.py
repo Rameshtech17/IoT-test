@@ -45,7 +45,9 @@ class SensorData(BaseModel):
     temperature: float
     humidity: float
 
-
+class deviceData(BaseModel):
+    device_id: str
+    status: bool
 # --------------------------------------------------
 # Root
 # --------------------------------------------------
@@ -202,3 +204,86 @@ def sensor_history(
             status_code=500,
             detail=str(e)
         )
+
+# --------------------------------------------------
+# Get Device status latest reading
+# --------------------------------------------------
+
+@app.get("/api/device/{device_id}/latest")
+def latest_sensor_data(device_id: str):
+
+    try:
+        response = (
+            supabase
+            .table("device_control")
+            .select("*")
+            .eq("device_id", device_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if not response.data:
+            raise HTTPException(
+                status_code=404,
+                detail="No sensor data found"
+            )
+
+        return {
+            "success": True,
+            "data": response.data[0]
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+
+@app.post("/api/devicecontrol")
+def receive_sensor_data(
+    data: deviceData,
+    x_api_key: str | None = Header(default=None)
+):
+
+    # Check API key
+    if x_api_key != DEVICE_API_KEY:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key"
+        )
+
+    # Validate values
+
+
+    record = {
+        "device_id": data.device_id,
+        "status": data.status,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    try:
+        response = (
+            supabase
+            .table("device_control")
+            .insert(record)
+            .execute()
+        )
+
+        return {
+            "success": True,
+            "message": "device data saved",
+            "data": response.data
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+
