@@ -45,9 +45,12 @@ class SensorData(BaseModel):
     temperature: float
     humidity: float
 
-class deviceData(BaseModel):
+class DeviceData(BaseModel):
     device_id: str
     status: bool
+
+class HeartbeatData(BaseModel):
+    device_id: str
 # --------------------------------------------------
 # Root
 # --------------------------------------------------
@@ -246,7 +249,7 @@ def latest_sensor_data(device_id: str):
 
 @app.post("/api/devicecontrol")
 def receive_sensor_data(
-    data: deviceData,
+    data: DeviceData,
     x_api_key: str | None = Header(default=None)
 ):
 
@@ -286,4 +289,48 @@ def receive_sensor_data(
             detail=str(e)
         )
 
+@app.post("/api/device/heartbeat")
+def device_heartbeat(
+    data: HeartbeatData,
+    x_api_key: str | None = Header(default=None)
+):
+
+    if x_api_key != DEVICE_API_KEY:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key"
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    try:
+
+        response = (
+            supabase
+            .table("device_status")
+            .upsert(
+                {
+                    "device_id": data.device_id,
+                    "is_online": True,
+                    "last_seen": now,
+                    "updated_at": now
+                },
+                on_conflict="device_id"
+            )
+            .execute()
+        )
+
+        return {
+            "success": True,
+            "device_id": data.device_id,
+            "is_online": True,
+            "last_seen": now
+        }
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
